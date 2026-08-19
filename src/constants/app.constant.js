@@ -1,4 +1,4 @@
-export const APP_NAME = "Expense App";
+export const APP_NAME = "My Application";
 export const APP_KEY = "tailux";
 
 // Redirect Paths

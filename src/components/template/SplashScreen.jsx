@@ -10,7 +10,7 @@ export function SplashScreen() {
       <div className="flex items-center gap-3">
         <div className="h-8 w-1 bg-[#F11D1F] rounded-full" />
         <span className="text-lg font-semibold text-black">
-          Invoice Procurement System
+          My Application
         </span>
       </div>
       <Progress
