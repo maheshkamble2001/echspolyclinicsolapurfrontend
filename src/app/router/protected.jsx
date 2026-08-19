@@ -27,6 +27,12 @@ const protectedRoutes = {
           }),
         },
         {
+          path: "poly-clinic",
+          lazy: async () => ({
+            Component: (await import("app/pages/Clinic/Polyclinicc")).default,
+          }),
+        },
+        {
           path: "doctors",
           lazy: async () => {
             const CurrentPage = (await import("app/pages/doctors/index"))
@@ -39,9 +45,29 @@ const protectedRoutes = {
                 </RoleGuard>
               ),
             };
+            
           },
 
         },
+        // {
+        //   path: "doctors",
+        //   lazy: async () => {
+        //     const CurrentPage = (await import("app/pages/doctors/"))
+        //       .default;
+
+        //     return {
+        //       Component: () => (
+        //         <RoleGuard userAllowRole={200000}>
+        //           <CurrentPage />
+        //         </RoleGuard>
+        //       ),
+        //     };
+        //   },
+
+        // },
+
+  
+
 
       ],
     },
