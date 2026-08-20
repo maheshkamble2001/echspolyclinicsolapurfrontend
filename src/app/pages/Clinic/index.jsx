@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getDoctorwiseTokens } from '../../../api/polyclinic.js/polyclinicc';
+// ✅ PaginationSection import
+import { PaginationSection } from "components/shared/table/PaginationSection";
 
 const Polyclinic = () => {
   const [doctors, setDoctors] = useState([]);
@@ -12,7 +14,7 @@ const Polyclinic = () => {
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [limit, setLimit] = useState(4); // Default 4 for desktop
+  const [limit, setLimit] = useState(3);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
@@ -30,7 +32,7 @@ const Polyclinic = () => {
 
   // Set limit based on mobile/desktop
   useEffect(() => {
-    setLimit(isMobile ? 1 : 4);
+    setLimit(isMobile ? 1 : 3);
     setCurrentPage(1);
   }, [isMobile]);
 
@@ -49,16 +51,16 @@ const Polyclinic = () => {
     fetchTokens(debouncedSearch, currentPage, limit);
   }, [debouncedSearch, currentPage, limit]);
 
-  const fetchTokens = async (search = '', page = 1, itemsPerPage = 4) => {
+  const fetchTokens = async (search = '', page = 1, itemsPerPage = 3) => {
     try {
+      setLoading(true);
       setPaginationLoading(true);
       setError(null);
       
-      // Pass all parameters to API
       const response = await getDoctorwiseTokens({
         search: search,
         page: page,
-        limit: limit
+        limit: itemsPerPage
       });
 
       console.log('API Response:', response);
@@ -74,10 +76,8 @@ const Polyclinic = () => {
         }));
         setDoctors(formattedDoctors);
         
-        // Set pagination data from API response
         const pagination = response.data.pagination || {};
         setTotalItems(pagination.totalRecords || 0);
-        // Calculate total pages based on totalRecords and limit
         const totalPagesCalc = Math.ceil((pagination.totalRecords || 0) / itemsPerPage);
         setTotalPages(totalPagesCalc);
       } else {
@@ -108,45 +108,122 @@ const Polyclinic = () => {
     }
   };
 
-  const handleScroll = (direction) => {
-    if (scrollRef.current) {
-      const { scrollLeft, clientWidth } = scrollRef.current;
-      const scrollAmount = clientWidth * 0.85;
-      scrollRef.current.scrollTo({
-        left: direction === 'left' ? scrollLeft - scrollAmount : scrollLeft + scrollAmount,
-        behavior: 'smooth',
-      });
-    }
+  // Handle limit change
+  const handleLimitChange = (newLimit) => {
+    setLimit(newLimit);
+    setCurrentPage(1);
   };
 
-  // Loading State
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-r from-[#6a11cb] to-[#2575fc] flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white/80">Loading tokens...</p>
-        </div>
-      </div>
-    );
-  }
+  // ✅ Create a dummy table object for PaginationSection compatibility
+  const dummyTable = {
+    getState: () => ({
+      pagination: {
+        pageIndex: currentPage - 1,
+        pageSize: limit,
+      }
+    }),
+    setPageIndex: (index) => handlePageChange(index + 1),
+    setPageSize: (size) => handleLimitChange(size),
+    getPageCount: () => totalPages,
+    getCanPreviousPage: () => currentPage > 1,
+    getCanNextPage: () => currentPage < totalPages,
+    previousPage: () => handlePageChange(currentPage - 1),
+    nextPage: () => handlePageChange(currentPage + 1),
+  };
 
-  // Error State
-  if (error) {
+  // ✅ Custom Mobile Pagination
+  const MobilePagination = () => {
+    const pageNumbers = [];
+    const maxVisible = 5;
+    
+    let startPage = Math.max(1, currentPage - 2);
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    
+    if (endPage - startPage < maxVisible - 1) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(i);
+    }
+
     return (
-      <div className="min-h-screen bg-gradient-to-r from-[#6a11cb] to-[#2575fc] flex items-center justify-center">
-        <div className="text-white text-center">
-          <p className="text-red-300 text-lg mb-2">⚠️ {error}</p>
-          <button 
-            onClick={() => fetchTokens(debouncedSearch, currentPage, limit)}
-            className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition"
+      <div className="inline-flex items-center justify-center gap-1 bg-[#ebf0f7] p-1.5 rounded-2xl shadow-md">
+        {/* Previous Button */}
+        <button
+          onClick={() => handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
+            currentPage === 1
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-200 active:bg-gray-300'
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
+        {/* Page Numbers */}
+        {startPage > 1 && (
+          <>
+            <button
+              onClick={() => handlePageChange(1)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-200 transition-all"
+            >
+              1
+            </button>
+            {startPage > 2 && (
+              <span className="text-gray-400 text-sm px-1">…</span>
+            )}
+          </>
+        )}
+
+        {pageNumbers.map((num) => (
+          <button
+            key={num}
+            onClick={() => handlePageChange(num)}
+            className={`w-8 h-8 flex items-center justify-center rounded-xl text-sm font-bold transition-all ${
+              currentPage === num
+                ? 'bg-[#a020f0] text-white shadow-md scale-105'
+                : 'text-gray-700 hover:bg-gray-200'
+            }`}
           >
-            Retry
+            {num}
           </button>
-        </div>
+        ))}
+
+        {endPage < totalPages && (
+          <>
+            {endPage < totalPages - 1 && (
+              <span className="text-gray-400 text-sm px-1">…</span>
+            )}
+            <button
+              onClick={() => handlePageChange(totalPages)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-200 transition-all"
+            >
+              {totalPages}
+            </button>
+          </>
+        )}
+
+        {/* Next Button */}
+        <button
+          onClick={() => handlePageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
+            currentPage === totalPages
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-200 active:bg-gray-300'
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       </div>
     );
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-[#6a11cb] to-[#2575fc] flex flex-col items-center justify-start pt-4 pb-8 px-2 sm:px-4 md:px-6 relative text-white font-sans overflow-x-hidden">
@@ -172,7 +249,7 @@ const Polyclinic = () => {
           {import.meta.env.VITE_TITLE || ''}
         </h1>
         
-        {/* Search Input Filter - White Background with Dark Text */}
+        {/* Search Input Filter */}
         <div className="relative mt-3 sm:mt-4 md:mt-6 max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg mx-auto px-2 sm:px-0">
           <div className="absolute inset-y-0 left-0 pl-2.5 sm:pl-3.5 flex items-center pointer-events-none text-gray-400">
             <svg className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -194,154 +271,139 @@ const Polyclinic = () => {
               ✕
             </button>
           )}
-          {/* Loading indicator for search */}
           {searchQuery !== debouncedSearch && (
             <div className="absolute right-8 sm:right-10 top-2.5 sm:top-3">
               <div className="w-4 h-4 border-2 border-[#6a11cb] border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
         </div>
-
-        {/* Total Tokens Count */}
-        <p className="text-white/50 text-xs mt-2">
-          Total Tokens: {totalItems}
-        </p>
       </div>
 
       {/* Horizontal Carousel Container */}
       <div className="relative w-full max-w-7xl px-4 sm:px-8 md:px-12 z-10 mt-1 sm:mt-2 md:mt-4">
         
-        {/* Left Arrow Button - Hide on mobile */}
-        {!isMobile && doctors.length > 0 && (
-          <button
-            onClick={() => {
-              handlePageChange(currentPage - 1)
-              handleScroll('left')}}
-            className="absolute left-0 sm:left-0 top-1/2 -translate-y-1/2 z-20 bg-white/30 hover:bg-white/40 text-white p-1.5 sm:p-2 md:p-3.5 rounded-full backdrop-blur-md border border-white/30 transition-all duration-300 hover:scale-110 active:scale-95 shadow-xl flex items-center justify-center"
-            aria-label="Scroll Left"
-          >
-            <svg className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-        )}
-
-        {/* Right Arrow Button - Hide on mobile */}
-        {!isMobile && doctors.length > 0 && (
-          <button
-            onClick={() => {
-              handlePageChange(currentPage + 1)
-              handleScroll('right')}}
-            className="absolute right-0 sm:right-0 top-1/2 -translate-y-1/2 z-20 bg-white/30 hover:bg-white/40 text-white p-1.5 sm:p-2 md:p-3.5 rounded-full backdrop-blur-md border border-white/30 transition-all duration-300 hover:scale-110 active:scale-95 shadow-xl flex items-center justify-center"
-            aria-label="Scroll Right"
-          >
-            <svg className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        )}
-
-        {/* Cards Wrapper - White Background with Dark Text */}
+        {/* Cards Wrapper */}
         <div
           ref={scrollRef}
-          className="flex gap-3 md:gap-4 overflow-x-auto scroll-smooth py-3 sm:py-4 md:py-6 px-2 sm:px-4 no-scrollbar snap-x snap-mandatory min-h-[180px] sm:min-h-[210px] md:min-h-[260px]"
+          className="flex gap-3 md:gap-4 overflow-x-auto scroll-smooth py-3 sm:py-4 md:py-6 px-2 sm:px-4 no-scrollbar snap-x snap-mandatory min-h-[220px] sm:min-h-[250px] md:min-h-[280px] bg-gradient-to-r from-[#4a1a8a]/40 to-[#1a4a8a]/40 backdrop-blur-sm rounded-2xl border border-white/10 items-center justify-center"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {doctors.length > 0 ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-3"></div>
+              <p className="text-white/80 text-sm font-medium">Loading tokens...</p>
+            </div>
+          ) : doctors.length > 0 ? (
             doctors.map((doctor) => (
               <div
                 key={doctor.id}
-                className="flex-none snap-start w-full md:w-[calc(50%-8px)] lg:w-[calc(25%-12px)] bg-white rounded-2xl p-4 sm:p-5 md:p-6 flex flex-col items-center justify-between shadow-2xl hover:shadow-[#6a11cb]/20 transition-all duration-300 hover:-translate-y-2 group border border-gray-100"
+                className="flex-none snap-start w-full md:w-[calc(33.33%-10px)] lg:w-[calc(33.33%-12px)] bg-white rounded-2xl p-5 sm:p-6 md:p-7 flex flex-col items-center justify-between space-y-3 md:space-y-4 shadow-2xl hover:shadow-[#6a11cb]/20 transition-all duration-300 hover:-translate-y-2 group border border-gray-100 min-h-[220px] sm:min-h-[250px] md:min-h-[280px]"
               >
-                {/* Header Info */}
-                <div className="text-center space-y-1 w-full">
-                  <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-extrabold text-[#6a11cb] group-hover:text-[#2575fc] transition-colors tracking-wide truncate w-full">
+                {/* Doctor Name - Top & Center */}
+                <div className="text-center w-full">
+                  <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-extrabold text-[#6a11cb] group-hover:text-[#2575fc] transition-colors tracking-wide break-words leading-tight">
                     {doctor.name}
-                    {doctor.roomname && (
-                      <span className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-semibold text-[#6a11cb]/70 ml-1">
-                        ({doctor.roomname})
-                      </span>
-                    )}
                   </h2>
+                  
+                  {/* Room Name - In Brackets */}
+                  {doctor.roomname && (
+                    <p className="text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-[#6a11cb]/60 mt-1.5">
+                      ({doctor.roomname})
+                    </p>
+                  )}
                 </div>
 
-                {/* Patient / Token Count */}
-                <div className="my-2 sm:my-3 md:my-4 py-2 sm:py-2.5 md:py-3 px-4 md:px-6 bg-gradient-to-r from-[#6a11cb]/5 to-[#2575fc]/5 rounded-xl border border-gray-100 w-full flex flex-col items-center justify-center">
+                {/* Patient / Token Count - Center */}
+                <div className="py-2 sm:py-2.5 md:py-3 px-4 md:px-6 bg-gradient-to-r from-[#6a11cb]/5 to-[#2575fc]/5 rounded-xl border border-gray-100 w-full flex flex-col items-center justify-center">
                   <span className="text-3xl sm:text-4xl lg:text-5xl font-black text-[#dc2626] tracking-wider drop-shadow-sm">
                     {doctor.count}
+                  </span>
+                  <span className="text-[10px] sm:text-xs text-gray-400 font-medium uppercase tracking-wider">
+                    Total Patients
                   </span>
                 </div>
               </div>
             ))
           ) : (
-            <div className="w-full text-center py-12 bg-white/10 backdrop-blur-sm rounded-2xl">
-              <p className="text-white/80 font-medium text-lg mb-2">
-                {searchQuery ? `No tokens found for "${searchQuery}"` : 'No tokens available'}
+            /* ✨ ATTRACTIVE NO TOKENS FOUND / EMPTY STATE ✨ */
+            <div className="w-full flex flex-col items-center justify-center py-10 px-4 text-center">
+              
+              {/* Animated Icon Container */}
+              <div className="relative mb-5 flex items-center justify-center">
+                <div className="absolute inset-0 w-20 h-20 bg-white/10 rounded-full blur-xl animate-pulse"></div>
+                <div className="relative w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-tr from-white/20 to-white/5 border border-white/20 rounded-2xl backdrop-blur-md flex items-center justify-center shadow-xl transform -rotate-3 hover:rotate-0 transition-transform duration-300">
+                  <svg
+                    className="w-8 h-8 sm:w-10 sm:h-10 text-white/80 drop-shadow"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.8"
+                      d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"
+                    />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Title & Message */}
+              <h3 className="text-xl sm:text-2xl font-bold text-white tracking-wide drop-shadow mb-1.5">
+                {searchQuery ? 'No Matching Tokens' : 'No Tokens Available'}
+              </h3>
+              
+              <p className="text-xs sm:text-sm text-white/70 max-w-sm font-normal leading-relaxed mb-5">
+                {searchQuery ? (
+                  <>
+                    We couldn't find any token matching <span className="font-semibold text-white underline decoration-purple-400 decoration-2 underline-offset-2">"{searchQuery}"</span>. Please double-check your query.
+                  </>
+                ) : (
+                  'There are currently no active tokens in the queue. Please check back again later.'
+                )}
               </p>
-              <p className="text-white/50 text-sm">
-                {searchQuery ? 'Try adjusting your search term' : 'Check back later for updates'}
-              </p>
+
+              {/* Clear Search Button */}
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white text-xs sm:text-sm font-medium py-2 px-4 rounded-xl border border-white/20 backdrop-blur-md transition-all duration-200 shadow-md hover:shadow-lg active:scale-95"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Clear Search Filter
+                </button>
+              )}
             </div>
           )}
         </div>
 
-        {/* Pagination Controls */}
-        {totalPages > 1 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 sm:mt-6 pt-4 border-t border-white/20">
-            {/* Page Info */}
-            <div className="text-white/70 text-xs sm:text-sm">
-              {paginationLoading ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  Loading...
-                </span>
+        {/* ✅ PAGINATION */}
+        {!loading && doctors.length > 0 && (
+          <div className="mt-4 sm:mt-6 pt-4 border-t border-white/20">
+            <div className="flex justify-center w-full">
+              {isMobile ? (
+                <MobilePagination />
               ) : (
-                totalItems > 0 ? (
-                  `${((currentPage - 1) * limit) + 1} - ${Math.min(currentPage * limit, totalItems)} of ${totalItems} tokens`
-                ) : (
-                  'No tokens found'
-                )
+                <div className="w-full max-w-xs sm:max-w-md md:max-w-lg lg:max-w-full">
+                  <PaginationSection
+                    table={dummyTable}
+                    totalCount={totalItems}
+                    limit={limit}
+                    activePage={currentPage}
+                    setLimit={handleLimitChange}
+                    setActivePage={handlePageChange}
+                  />
+                </div>
               )}
-            </div>
-
-            {/* Pagination Buttons */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1 || paginationLoading}
-                className={`px-3 py-1.5 rounded-lg transition text-xs sm:text-sm ${
-                  currentPage === 1 || paginationLoading
-                    ? 'bg-white/5 text-white/40 cursor-not-allowed'
-                    : 'bg-white/20 hover:bg-white/30 text-white'
-                }`}
-              >
-                ← Prev
-              </button>
-
-              <span className="text-white font-medium text-xs sm:text-sm px-2">
-                {currentPage} / {totalPages}
-              </span>
-
-              <button
-                onClick={() => {
-                  console.log("hi")
-                  handlePageChange(currentPage + 1)}}
-                disabled={currentPage === totalPages || paginationLoading}
-                className={`px-3 py-1.5 rounded-lg transition text-xs sm:text-sm ${
-                  currentPage === totalPages || paginationLoading
-                    ? 'bg-white/5 text-white/40 cursor-not-allowed'
-                    : 'bg-white/20 hover:bg-white/30 text-white'
-                }`}
-              >
-                Next →
-              </button>
             </div>
           </div>
         )}
       </div>
 
       {/* Add CSS for hiding scrollbar */}
-      <style jsx>{`
+      <style>{`
         .no-scrollbar::-webkit-scrollbar {
           display: none;
         }

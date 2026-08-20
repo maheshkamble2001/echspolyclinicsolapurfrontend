@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getDoctorsList, doctorLogin } from '../../../api/doctors.js/doctor';
 import { toast } from 'sonner';
+// ✅ PaginationSection import
+import { PaginationSection } from "components/shared/table/PaginationSection";
 
 const DoctorsPage = () => {
   const [doctors, setDoctors] = useState([]);
@@ -9,17 +11,24 @@ const DoctorsPage = () => {
   const [error, setError] = useState(null);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Login States
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
-  const scrollRef = useRef(null);
   
+  // ✅ New Error States for Inputs
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  
+  const scrollRef = useRef(null);
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [limit, setLimit] = useState(4); // Default 4 for desktop
+  const [limit, setLimit] = useState(3);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
@@ -37,7 +46,7 @@ const DoctorsPage = () => {
 
   // Set limit based on mobile/desktop
   useEffect(() => {
-    setLimit(isMobile ? 1 : 4);
+    setLimit(isMobile ? 1 : 3);
     setCurrentPage(1);
   }, [isMobile]);
 
@@ -56,11 +65,12 @@ const DoctorsPage = () => {
     fetchDoctors(debouncedSearch, currentPage, limit);
   }, [debouncedSearch, currentPage, limit]);
 
-  const fetchDoctors = async (search = '', page = 1, itemsPerPage = 4) => {
+  const fetchDoctors = async (search = '', page = 1, itemsPerPage = 3) => {
     try {
+      setLoading(true);
       setPaginationLoading(true);
       setError(null);
-      
+
       const response = await getDoctorsList({
         search: search,
         page: page,
@@ -78,13 +88,11 @@ const DoctorsPage = () => {
           addedon: doc.addedon
         }));
         setDoctors(formattedDoctors);
-        
-        // Set pagination data from API response
+
         const pagination = response.data.pagination || {};
         const totalRecords = pagination.totalRecords || 0;
         setTotalItems(totalRecords);
-        
-        // Calculate total pages based on totalRecords and limit
+
         const totalPagesCalc = Math.ceil(totalRecords / itemsPerPage);
         setTotalPages(totalPagesCalc);
       } else {
@@ -112,52 +120,10 @@ const DoctorsPage = () => {
     }
   };
 
-  // Handle scroll with pagination integration
-  const handleScrollWithPagination = (direction) => {
-    if (scrollRef.current) {
-      const { scrollLeft, clientWidth, scrollWidth } = scrollRef.current;
-      const scrollAmount = clientWidth * 0.85;
-      
-      // Calculate new scroll position
-      let newScrollLeft;
-      if (direction === 'left') {
-        newScrollLeft = scrollLeft - scrollAmount;
-      } else {
-        newScrollLeft = scrollLeft + scrollAmount;
-      }
-      
-      // Check if we're at the end of scroll
-      const isAtStart = scrollLeft <= 0;
-      const isAtEnd = scrollLeft + clientWidth >= scrollWidth - 10;
-      
-      // If scrolling right and at end, go to next page
-      if (direction === 'right' && isAtEnd && currentPage < totalPages) {
-        handlePageChange(currentPage + 1);
-        // Reset scroll to start after page change
-        setTimeout(() => {
-          if (scrollRef.current) {
-            scrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-          }
-        }, 100);
-      } 
-      // If scrolling left and at start, go to previous page
-      else if (direction === 'left' && isAtStart && currentPage > 1) {
-        handlePageChange(currentPage - 1);
-        // Scroll to end after page change
-        setTimeout(() => {
-          if (scrollRef.current) {
-            scrollRef.current.scrollTo({ left: scrollRef.current.scrollWidth, behavior: 'smooth' });
-          }
-        }, 100);
-      } 
-      // Normal scroll within current page
-      else {
-        scrollRef.current.scrollTo({
-          left: newScrollLeft,
-          behavior: 'smooth',
-        });
-      }
-    }
+  // Handle limit change
+  const handleLimitChange = (newLimit) => {
+    setLimit(newLimit);
+    setCurrentPage(1);
   };
 
   const handleOpenModal = (doctor) => {
@@ -166,6 +132,8 @@ const DoctorsPage = () => {
     setLoginError('');
     setUsername('');
     setPassword('');
+    setEmailError('');
+    setPasswordError('');
   };
 
   const handleCloseModal = () => {
@@ -175,12 +143,34 @@ const DoctorsPage = () => {
     setPassword('');
     setLoginError('');
     setLoginLoading(false);
+    setEmailError('');
+    setPasswordError('');
   };
 
+  // ✅ Updated Submit Handler with Validation
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoginLoading(true);
+    
+    // Reset Errors
     setLoginError('');
+    setEmailError('');
+    setPasswordError('');
+
+    // Validation
+    let hasError = false;
+    if (!username.trim()) {
+      setEmailError('Email is required');
+      hasError = true;
+    }
+    if (!password.trim()) {
+      setPasswordError('Password is required');
+      hasError = true;
+    }
+
+    // Stop if validation fails
+    if (hasError) return;
+
+    setLoginLoading(true);
 
     try {
       const response = await doctorLogin({
@@ -190,7 +180,7 @@ const DoctorsPage = () => {
 
       console.log('Login Response:', response);
 
-      if (response.code == 200) {
+      if (response.code === 200) {
         toast.success("Login Successfully!");
         handleCloseModal();
       } else {
@@ -205,59 +195,142 @@ const DoctorsPage = () => {
     }
   };
 
-  // Loading State
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-r from-[#6a11cb] to-[#2575fc] flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white/80">Loading doctors...</p>
-        </div>
-      </div>
-    );
-  }
+  // ✅ Create a dummy table object for PaginationSection compatibility
+  const dummyTable = {
+    getState: () => ({
+      pagination: {
+        pageIndex: currentPage - 1,
+        pageSize: limit,
+      }
+    }),
+    setPageIndex: (index) => handlePageChange(index + 1),
+    setPageSize: (size) => handleLimitChange(size),
+    getPageCount: () => totalPages,
+    getCanPreviousPage: () => currentPage > 1,
+    getCanNextPage: () => currentPage < totalPages,
+    previousPage: () => handlePageChange(currentPage - 1),
+    nextPage: () => handlePageChange(currentPage + 1),
+  };
 
-  // Error State
-  if (error) {
+  // ✅ Mobile Pagination Component
+  const MobilePagination = () => {
+    const pageNumbers = [];
+    const maxVisible = 3;
+    
+    let startPage = Math.max(1, currentPage - 1);
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    
+    if (endPage - startPage < maxVisible - 1) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(i);
+    }
+
     return (
-      <div className="min-h-screen bg-gradient-to-r from-[#6a11cb] to-[#2575fc] flex items-center justify-center">
-        <div className="text-white text-center">
-          <p className="text-red-300 text-lg mb-2">⚠️ {error}</p>
-          <button 
-            onClick={() => fetchDoctors(debouncedSearch, currentPage, limit)}
-            className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition"
+      <div className="inline-flex items-center justify-center gap-1 bg-[#ebf0f7] p-1.5 rounded-2xl shadow-md max-w-full overflow-x-auto">
+        {/* Previous Button */}
+        <button
+          onClick={() => handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className={`w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-xs sm:text-sm font-medium transition-all ${
+            currentPage === 1
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-200 active:bg-gray-300'
+          }`}
+        >
+          <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
+        {/* First Page */}
+        {startPage > 1 && (
+          <>
+            <button
+              onClick={() => handlePageChange(1)}
+              className="w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-xs sm:text-sm font-bold text-gray-700 hover:bg-gray-200 transition-all"
+            >
+              1
+            </button>
+            {startPage > 2 && (
+              <span className="text-gray-400 text-xs px-0.5">…</span>
+            )}
+          </>
+        )}
+
+        {/* Page Numbers */}
+        {pageNumbers.map((num) => (
+          <button
+            key={num}
+            onClick={() => handlePageChange(num)}
+            className={`w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 flex items-center justify-center rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              currentPage === num
+                ? 'bg-[#a020f0] text-white shadow-md scale-105'
+                : 'text-gray-700 hover:bg-gray-200'
+            }`}
           >
-            Retry
+            {num}
           </button>
-        </div>
+        ))}
+
+        {/* Last Page */}
+        {endPage < totalPages && (
+          <>
+            {endPage < totalPages - 1 && (
+              <span className="text-gray-400 text-xs px-0.5">…</span>
+            )}
+            <button
+              onClick={() => handlePageChange(totalPages)}
+              className="w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-xs sm:text-sm font-bold text-gray-700 hover:bg-gray-200 transition-all"
+            >
+              {totalPages}
+            </button>
+          </>
+        )}
+
+        {/* Next Button */}
+        <button
+          onClick={() => handlePageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className={`w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-xs sm:text-sm font-medium transition-all ${
+            currentPage === totalPages
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-600 hover:bg-gray-200 active:bg-gray-300'
+          }`}
+        >
+          <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       </div>
     );
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-[#6a11cb] to-[#2575fc] flex flex-col items-center justify-start pt-4 pb-8 px-2 sm:px-4 md:px-6 relative text-white font-sans overflow-x-hidden">
-      
-      {/* Simple Back Button - Top Left */}
+
+      {/* Back Button */}
       <div className="fixed top-3 left-3 sm:top-4 sm:left-4 z-50">
-        <Link 
-          to="/polyclinic" 
+        <Link
+          to="/polyclinic"
           className="text-white/80 hover:text-white text-xs sm:text-sm font-medium transition-colors"
         >
           ← Back
         </Link>
       </div>
 
-      {/* Background Decorative Glow */}
+      {/* Decorative Glow */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] sm:w-[400px] md:w-[500px] h-[300px] sm:h-[400px] md:h-[500px] bg-white/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header */}
       <div className="text-center mb-4 sm:mb-6 md:mb-8 z-10 w-full max-w-3xl px-2 sm:px-4 mt-12 sm:mt-16 md:mt-20">
-        
         <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold mt-3 sm:mt-4 text-white tracking-tight leading-tight drop-shadow-lg">
           {import.meta.env.VITE_TITLE2}
         </h1>
-      
-        {/* Search Input - White Background */}
+
+        {/* Search Input */}
         <div className="relative mt-3 sm:mt-4 md:mt-6 max-w-sm sm:max-w-md md:max-w-lg mx-auto px-2 sm:px-0">
           <div className="absolute inset-y-0 left-0 pl-2.5 sm:pl-3.5 flex items-center pointer-events-none text-gray-400">
             <svg className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -279,219 +352,224 @@ const DoctorsPage = () => {
               ✕
             </button>
           )}
-          {/* Loading indicator for search */}
           {searchQuery !== debouncedSearch && (
             <div className="absolute right-8 sm:right-10 top-2.5 sm:top-3">
               <div className="w-4 h-4 border-2 border-[#dc2626] border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
         </div>
-
-        {/* Doctor Count */}
-        <p className="text-white/50 text-xs mt-2">
-          Total Doctors: {totalItems}
-        </p>
       </div>
 
-      {/* Horizontal Carousel */}
+      {/* Horizontal Carousel Container */}
       <div className="relative w-full max-w-7xl px-4 sm:px-8 md:px-12 z-10 mt-1 sm:mt-2 md:mt-4">
-        
-        {/* Left Arrow - Hide on mobile */}
-        {!isMobile && doctors.length > 0 && (
-          <button
-            onClick={() => handleScrollWithPagination('left')}
-            className="absolute left-0 sm:left-0 top-1/2 -translate-y-1/2 z-20 bg-white/30 hover:bg-white/40 text-white p-1.5 sm:p-2 md:p-3 rounded-full backdrop-blur-md border border-white/30 transition-all duration-300 hover:scale-110 active:scale-95 shadow-xl flex items-center justify-center"
-          >
-            <svg className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-        )}
 
-        {/* Right Arrow - Hide on mobile */}
-        {!isMobile && doctors.length > 0 && (
-          <button
-            onClick={() => handleScrollWithPagination('right')}
-            className="absolute right-0 sm:right-0 top-1/2 -translate-y-1/2 z-20 bg-white/30 hover:bg-white/40 text-white p-1.5 sm:p-2 md:p-3 rounded-full backdrop-blur-md border border-white/30 transition-all duration-300 hover:scale-110 active:scale-95 shadow-xl flex items-center justify-center"
-          >
-            <svg className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        )}
-
-        {/* Cards Wrapper - White Background */}
+        {/* Cards Wrapper */}
         <div
           ref={scrollRef}
-          className="flex gap-3 md:gap-4 overflow-x-auto scroll-smooth py-3 sm:py-4 md:py-6 px-2 sm:px-4 no-scrollbar snap-x snap-mandatory min-h-[180px] sm:min-h-[200px] md:min-h-[240px]"
+          className="flex gap-3 md:gap-4 overflow-x-auto scroll-smooth py-3 sm:py-4 md:py-6 px-2 sm:px-4 no-scrollbar snap-x snap-mandatory min-h-[220px] sm:min-h-[250px] md:min-h-[280px] bg-[#4a1a8a]/40 backdrop-blur-sm rounded-2xl border border-white/10 items-center justify-center"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {doctors.length > 0 ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-3"></div>
+              <p className="text-white/80 text-sm font-medium">Loading doctors...</p>
+            </div>
+          ) : doctors.length > 0 ? (
             doctors.map((doctor) => (
               <div
                 key={doctor.id}
-                className="flex-none snap-start w-full md:w-[calc(50%-6px)] lg:w-[calc(25%-12px)] bg-white rounded-2xl p-4 sm:p-5 md:p-6 flex flex-col items-center justify-between space-y-3 md:space-y-5 shadow-2xl hover:shadow-[#dc2626]/20 transition-all duration-300 hover:-translate-y-2 group border border-gray-100"
+                className="flex-none snap-start w-full md:w-[calc(33.33%-10px)] lg:w-[calc(33.33%-12px)] bg-white rounded-2xl p-5 sm:p-6 md:p-7 flex flex-col items-center justify-between space-y-3 md:space-y-4 shadow-2xl hover:shadow-[#dc2626]/20 transition-all duration-300 hover:-translate-y-2 group border border-gray-100 min-h-[220px] sm:min-h-[250px] md:min-h-[280px]"
               >
-                {/* Profile Logo - Red Background */}
-                <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-red-600 flex items-center justify-center text-base sm:text-lg md:text-xl font-bold text-white shadow-lg group-hover:scale-105 transition-transform duration-300">
-                  {doctor.name.replace('Dr ', '').charAt(0) || 'D'}
-                </div>
-
-                <div className="text-center space-y-1 w-full">
-                  <h2 className="text-base sm:text-lg md:text-xl font-extrabold text-[#6a11cb] group-hover:text-[#2575fc] transition-colors truncate">
+                {/* Doctor Name - Top & Center */}
+                <div className="text-center w-full">
+                  <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-1xl font-extrabold text-[#6a11cb] group-hover:text-[#2575fc] transition-colors tracking-wide break-words leading-tight">
                     {doctor.name}
                   </h2>
-                  <p className="text-xs sm:text-sm text-gray-500 font-medium truncate">
-                    {doctor.role}
-                  </p>
-                  <p className="text-[10px] text-gray-400">
-                    ID: {doctor.doctorid}
-                  </p>
+                  
+                  {/* Room Name */}
+                  {doctor.role && doctor.role !== 'Medical Specialist' && (
+                    <p className="text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-[#6a11cb]/60 mt-1.5">
+                      ({doctor.role})
+                    </p>
+                  )}
                 </div>
 
-                {/* Button - Red Background */}
                 <button
                   onClick={() => handleOpenModal(doctor)}
-                  className="w-full bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-semibold py-2 sm:py-2.5 px-3 md:px-4 rounded-xl transition-all duration-200 shadow-lg shadow-red-600/30 active:scale-95"
+                  className="w-full bg-red-600 hover:bg-red-700 text-white text-sm sm:text-base font-semibold py-2.5 sm:py-3 px-4 md:px-6 rounded-xl transition-all duration-200 shadow-lg shadow-red-600/30 active:scale-95"
                 >
                   Doctor Login
                 </button>
               </div>
             ))
           ) : (
-            <div className="w-full text-center py-12 bg-white/10 backdrop-blur-sm rounded-2xl">
-              <p className="text-white/80 font-medium text-lg mb-2">
-                {searchQuery ? `No doctor found for "${searchQuery}"` : 'No doctors available'}
+            /* Empty State */
+            <div className="w-full flex flex-col items-center justify-center py-10 px-4 text-center">
+              <div className="relative mb-5 flex items-center justify-center">
+                <div className="absolute inset-0 w-20 h-20 bg-white/10 rounded-full blur-xl animate-pulse"></div>
+                <div className="relative w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-tr from-white/20 to-white/5 border border-white/20 rounded-2xl backdrop-blur-md flex items-center justify-center shadow-xl transform -rotate-3 hover:rotate-0 transition-transform duration-300">
+                  <svg
+                    className="w-8 h-8 sm:w-10 sm:h-10 text-white/80 drop-shadow"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.8"
+                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                    />
+                  </svg>
+                </div>
+              </div>
+
+              <h3 className="text-xl sm:text-2xl font-bold text-white tracking-wide drop-shadow mb-1.5">
+                {searchQuery ? 'No Matching Doctors' : 'No Doctors Available'}
+              </h3>
+              
+              <p className="text-xs sm:text-sm text-white/70 max-w-sm font-normal leading-relaxed mb-5">
+                {searchQuery ? (
+                  <>
+                    We couldn't find any doctor matching <span className="font-semibold text-white underline decoration-red-400 decoration-2 underline-offset-2">"{searchQuery}"</span>. Please check the spelling or clear the filter.
+                  </>
+                ) : (
+                  'There are currently no doctors listed in the system. Please check back again later.'
+                )}
               </p>
-              <p className="text-white/50 text-sm">
-                {searchQuery ? 'Try adjusting your search term' : 'Check back later for updates'}
-              </p>
+
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white text-xs sm:text-sm font-medium py-2 px-4 rounded-xl border border-white/20 backdrop-blur-md transition-all duration-200 shadow-md hover:shadow-lg active:scale-95"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Clear Search Filter
+                </button>
+              )}
             </div>
           )}
         </div>
 
-        {/* Pagination Controls */}
-        {totalPages > 1 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 sm:mt-6 pt-4 border-t border-white/20">
-            {/* Page Info */}
-            <div className="text-white/70 text-xs sm:text-sm">
-              {paginationLoading ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  Loading...
-                </span>
+        {/* PAGINATION SECTION */}
+        {!loading && doctors.length > 0 && (
+          <div className="mt-4 sm:mt-6 pt-4 border-t border-white/20">
+            <div className="flex justify-center w-full">
+              {isMobile ? (
+                <MobilePagination />
               ) : (
-                totalItems > 0 ? (
-                  `${((currentPage - 1) * limit) + 1} - ${Math.min(currentPage * limit, totalItems)} of ${totalItems} doctors`
-                ) : (
-                  'No doctors found'
-                )
+                <div className="w-full max-w-xs sm:max-w-md md:max-w-lg lg:max-w-full">
+                  <PaginationSection
+                    table={dummyTable}
+                    totalCount={totalItems}
+                    limit={limit}
+                    activePage={currentPage}
+                    setLimit={handleLimitChange}
+                    setActivePage={handlePageChange}
+                  />
+                </div>
               )}
-            </div>
-
-            {/* Pagination Buttons */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1 || paginationLoading}
-                className={`px-3 py-1.5 rounded-lg transition text-xs sm:text-sm ${
-                  currentPage === 1 || paginationLoading
-                    ? 'bg-white/5 text-white/40 cursor-not-allowed'
-                    : 'bg-white/20 hover:bg-white/30 text-white'
-                }`}
-              >
-                ← Prev
-              </button>
-
-              <span className="text-white font-medium text-xs sm:text-sm px-2">
-                {currentPage} / {totalPages}
-              </span>
-
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages || paginationLoading}
-                className={`px-3 py-1.5 rounded-lg transition text-xs sm:text-sm ${
-                  currentPage === totalPages || paginationLoading
-                    ? 'bg-white/5 text-white/40 cursor-not-allowed'
-                    : 'bg-white/20 hover:bg-white/30 text-white'
-                }`}
-              >
-                Next →
-              </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Login Modal - Same styling with red accent */}
+      {/* Login Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-3 sm:p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[90%] sm:max-w-md p-5 sm:p-6 md:p-8 relative mx-2 sm:mx-0">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 animate-fade-in">
+          {/* Modal Background changed to White */}
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[90%] sm:max-w-md p-6 sm:p-8 relative mx-2 sm:mx-0 border border-gray-200 text-gray-800">
+            
+            {/* Close Button */}
             <button
               onClick={handleCloseModal}
-              className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-gray-600 transition-colors text-lg sm:text-xl w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors text-lg sm:text-xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
             >
               ✕
             </button>
 
-            <div className="text-center mb-4 sm:mb-6">
-              <h3 className="text-xl sm:text-2xl font-bold text-[#dc2626]">Doctor Login</h3>
-              <p className="text-xs sm:text-sm text-gray-600 font-medium mt-1">
+            {/* Modal Header */}
+            <div className="text-center mb-6">
+              <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900">Doctor Login</h3>
+              <p className="text-sm sm:text-base text-[#6a11cb] font-semibold mt-2">
                 {selectedDoctor?.name}
-              </p>
-              <p className="text-[10px] text-gray-400">
-                ID: {selectedDoctor?.doctorid}
               </p>
             </div>
 
-            {/* Login Error Message */}
             {loginError && (
-              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-xl text-red-600 text-sm text-center">
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs sm:text-sm text-center font-medium">
                 {loginError}
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              
+              {/* ✅ Email Input with Error */}
               <div>
-                <label className="block text-[10px] sm:text-xs uppercase tracking-wider text-gray-500 font-medium mb-1 sm:mb-1.5">
+                <label className="block text-xs uppercase tracking-wider text-gray-600 font-semibold mb-1.5">
                   Email / ID
                 </label>
                 <input
                   type="email"
-                  required
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  onChange={(e) => {
+                    setUsername(e.target.value);
+                    setEmailError(''); // Clear error on typing
+                  }}
                   placeholder="Enter your email"
-                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 border border-gray-200 text-gray-800 rounded-xl focus:ring-2 focus:ring-[#dc2626] focus:border-transparent focus:outline-none placeholder-gray-400 transition-all text-sm sm:text-base"
+                  className={`w-full px-4 py-3 !bg-white text-gray-800 border rounded-xl focus:ring-2 focus:ring-[#dc2626] focus:border-transparent focus:outline-none placeholder-gray-400 transition-all shadow-sm text-sm sm:text-base ${
+                    emailError ? 'border-red-500' : 'border-gray-300'
+                  }`}
                 />
+                {/* ✅ Red Error Text Below Email */}
+                {emailError && (
+                  <p className="text-red-600 text-xs sm:text-sm font-medium mt-1.5 ml-1">
+                    {emailError}
+                  </p>
+                )}
               </div>
 
+              {/* ✅ Password Input with Error */}
               <div>
-                <label className="block text-[10px] sm:text-xs uppercase tracking-wider text-gray-500 font-medium mb-1 sm:mb-1.5">
+                <label className="block text-xs uppercase tracking-wider text-gray-600 font-semibold mb-1.5">
                   Password
                 </label>
                 <input
                   type="password"
-                  required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setPasswordError(''); // Clear error on typing
+                  }}
                   placeholder="Enter Password"
-                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-gray-50 border border-gray-200 text-gray-800 rounded-xl focus:ring-2 focus:ring-[#dc2626] focus:border-transparent focus:outline-none placeholder-gray-400 transition-all text-sm sm:text-base"
+                  className={`w-full px-4 py-3 !bg-white text-gray-800 border rounded-xl focus:ring-2 focus:ring-[#dc2626] focus:border-transparent focus:outline-none placeholder-gray-400 transition-all shadow-sm text-sm sm:text-base ${
+                    passwordError ? 'border-red-500' : 'border-gray-300'
+                  }`}
                 />
+                {/* ✅ Red Error Text Below Password */}
+                {passwordError && (
+                  <p className="text-red-600 text-xs sm:text-sm font-medium mt-1.5 ml-1">
+                    {passwordError}
+                  </p>
+                )}
               </div>
 
-              <div className="flex gap-2 sm:gap-3 pt-2 sm:pt-4">
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4">
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="w-1/2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 sm:py-3 rounded-xl transition-all text-sm sm:text-base"
+                  className="w-1/2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl transition-all text-sm sm:text-base border border-gray-300 active:scale-95"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  className="w-1/2 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 sm:py-3 rounded-xl transition-all shadow-lg shadow-red-600/30 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-1/2 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-red-600/30 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
                 >
                   {loginLoading ? 'Logging in...' : 'Login'}
                 </button>
@@ -501,10 +579,17 @@ const DoctorsPage = () => {
         </div>
       )}
 
-      {/* Add CSS for hiding scrollbar */}
-      <style jsx>{`
+      {/* Hide scrollbar & Autofill fix styles */}
+      <style>{`
         .no-scrollbar::-webkit-scrollbar {
           display: none;
+        }
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover, 
+        input:-webkit-autofill:focus, 
+        input:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0 30px white inset !important;
+          -webkit-text-fill-color: #1f2937 !important;
         }
       `}</style>
     </div>

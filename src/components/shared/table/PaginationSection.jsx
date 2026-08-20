@@ -10,7 +10,6 @@ import {
 } from "components/ui";
 import { useBreakpointsContext } from "app/contexts/breakpoint/context";
  
- 
 // ----------------------------------------------------------------------
  
 export function PaginationSection({
@@ -23,11 +22,6 @@ export function PaginationSection({
 }) {
   const paginationState = table.getState().pagination;
   const { isXl, is2xl } = useBreakpointsContext();
-  // console.log(table.getState())
-  // useEffect(()=>{
-  //   table.setPageSize(limit);
-  //   table.setPageIndex(activePage - 1)
-  // },[limit,activePage])
 
   const totalPages = limit > 0 ? Math.ceil(totalCount / limit) : 0;
  
@@ -36,17 +30,15 @@ export function PaginationSection({
       <div className="text-xs-plus flex items-center space-x-2">
         <span>Show</span>
         <Select
-          data={[ 10, 20, 30, 40, 50, 100]}
-          // value={paginationState.pageSize}
+          data={[1, 3, 10, 20, 30, 40, 50, 100]}
           value={limit}
           onChange={(e) => {
             setActivePage(1);
             setLimit(Number(e.target.value));
-            // table.setPageSize(Number(e.target.value));
           }}
           classNames={{
             root: "w-fit",
-            select: "h-7 rounded-full py-1 text-xs ltr:pr-7! rtl:pl-7!",
+            select: "h-7 rounded-full py-1 text-xs ltr:pr-7! rtl:pl-7! focus:border-red-500 focus:ring-red-500",
           }}
         />
         <span>entries</span>
@@ -55,33 +47,32 @@ export function PaginationSection({
         {
           (totalCount > limit && (
             <Pagination
-              // total={table.getPageCount()}
-              total={(totalCount % limit>0)? ((totalCount/limit)+1) : (totalCount/limit)}
-              // value={paginationState.pageIndex + 1}
-              // onChange={(page) => table.setPageIndex(page - 1)}
+              total={Math.ceil(totalCount / limit)}
               value={activePage}
               onChange={(page) => setActivePage(page)}
               siblings={isXl ? 2 : is2xl ? 3 : 1}
               boundaries={isXl ? 2 : 1}
+              color="red" // Agar UI library prop support karti hai
+              className="[&_.active]:bg-red-600 [&_.active]:text-white [&_button:hover]:text-red-600" // Tailwind override for active and hover states
             >
               {/* First Page Button */}
               <button
                 type="button"
-                className="px-2 py-1 text-sm rounded disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="px-2 py-1 text-sm rounded disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:text-red-600 transition-colors"
                 onClick={() => setActivePage(1)}
                 disabled={activePage === 1}
               >
                 &laquo;
               </button>
 
-              <PaginationPrevious />
-              <PaginationItems />
-              <PaginationNext />
+              <PaginationPrevious className="hover:text-red-600" />
+              <PaginationItems className="[&_[data-active]]:bg-red-600 [&_[data-active]]:text-white" />
+              <PaginationNext className="hover:text-red-600" />
 
               {/* Last Page Button */}
               <button
-                type="button "
-                className="px-2 py-1 text-sm rounded disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                type="button"
+                className="px-2 py-1 text-sm rounded disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:text-red-600 transition-colors"
                 onClick={() => setActivePage(totalPages)}
                 disabled={activePage === totalPages}
               >
@@ -92,9 +83,6 @@ export function PaginationSection({
         }
       </div>
       <div className="text-xs-plus truncate">
-        {/* {paginationState.pageIndex * paginationState.pageSize + 1} -{" "}
-        {table.getRowModel().rows.length} of{" "}
-        {table.getCoreRowModel().rows.length} entries */}
         {(() => {
           const page = Number(activePage) || 1;
           const size = Number(limit) || 0;
